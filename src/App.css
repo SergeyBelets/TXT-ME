@@ -91,7 +91,47 @@ body {
 .sidebar {
   position: sticky;
   top: 2rem;
-  height: fit-content;
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Hide scrollbar by default for cleaner look */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s;
+}
+
+/* Show scrollbar on hover */
+.sidebar:hover {
+  scrollbar-color: var(--muted-foreground) var(--muted);
+}
+
+/* For webkit browsers (Chrome, Safari, Edge) */
+.sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+  transition: background 0.3s;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+
+/* Show scrollbar on hover for webkit browsers */
+.sidebar:hover::-webkit-scrollbar-track {
+  background: var(--muted);
+}
+
+.sidebar:hover::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+}
+
+.sidebar:hover::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground);
 }
 
 /* КНОПКА РАЗВЕРНУТЬ - СКРЫТА В ДЕСКТОПЕ */
