@@ -64,16 +64,18 @@ export const commentsAPI = {
   delete: (postId, commentId) => api.delete(`/posts/${postId}/comments/${commentId}`),
 };
 
-// API для управления профилем (ИСПРАВЛЕНО: добавлен префикс /admin)
+// API для управления профилем
 export const profileAPI = {
   getProfile: () => api.get('/admin/users/profile'),
   updateEmail: (email) => api.put('/admin/users/profile/email', { email }),
   deleteEmail: () => api.delete('/admin/users/profile/email'),
   updatePassword: (oldPassword, newPassword) => api.put('/admin/users/profile/password', { oldPassword, newPassword }),
+
+  // Avatar management (ДОБАВЛЕНО)
   addAvatar: (dataUrl) => api.post('/admin/users/profile/avatar', { dataUrl }),
   deleteAvatar: (avatarId) => api.delete(`/admin/users/profile/avatar/${avatarId}`),
   setActiveAvatar: (avatarId) => api.put('/admin/users/profile/avatar/active', { avatarId }),
-  getUserAvatar: (username) => api.get(`/users/${username}/avatar`),
+  getUserAvatar: (userId) => api.get(`/admin/users/${userId}/avatar`),
 };
 
 export default api;
