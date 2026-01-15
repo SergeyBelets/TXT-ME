@@ -74,7 +74,7 @@ export const profileAPI = {
   // Avatar management (ДОБАВЛЕНО)
   addAvatar: (dataUrl) => api.post('/admin/users/profile/avatar', { dataUrl }),
   deleteAvatar: (avatarId) => api.delete(`/admin/users/profile/avatar/${avatarId}`),
-  setActiveAvatar: (avatarId) => api.put('/admin/users/profile/avatar/active', { avatarId }),
+  setActiveAvatar: (avatarId) => api.put(`/admin/users/profile/avatar/active/${avatarId}`),
   getUserAvatar: (userId) => api.get(`/admin/users/${userId}/avatar`),
 };
 
