@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { profileAPI } from '../services/api';
+import { useAuth } from '../utils/AuthContext';
+
 
 export default function ProfileEdit() {
   const [profile, setProfile] = useState(null);
@@ -24,12 +26,16 @@ export default function ProfileEdit() {
   const [uploading, setUploading] = useState(false);
 
   const navigate = useNavigate();
+  const { user } = useAuth();
 
+  // Оставляем только ОДИН useEffect
   useEffect(() => {
     fetchProfile();
   }, []);
 
   const fetchProfile = async () => {
+    setLoading(true); // Всегда сбрасываем состояние в начале
+    setError('');
     try {
       const response = await profileAPI.getProfile();
       const data = response.data;
@@ -39,9 +45,12 @@ export default function ProfileEdit() {
       setActiveAvatarId(data.activeAvatarId || null);
     } catch (err) {
       console.error('Failed to load profile:', err);
+      // Если 401 — просто выходим. setLoading(false) сработает в finally
+      if (err.response?.status === 401) return;
+
       setError('Не удалось загрузить профиль');
     } finally {
-      setLoading(false);
+      setLoading(false); // ГАРАНТИРОВАННО «размораживает» экран
     }
   };
 
@@ -178,7 +187,9 @@ export default function ProfileEdit() {
     }
   };
 
-  if (loading) return <div className="loading">Загрузка...</div>;
+  if (loading) return <div className="container">Загрузка...</div>;
+  if (!profile) return <div className="container">Пожалуйста, войдите заново для загрузки профиля</div>;
+
 
   return (
     <div className="profile-edit">

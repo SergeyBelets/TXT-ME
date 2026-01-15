@@ -24,3 +24,9 @@ yarn-error.log*
 # IDE
 .vscode/
 .idea/
+
+# root hidden folders
+/.[A-Z]*/
+
+# agents
+/[ACG]*.md

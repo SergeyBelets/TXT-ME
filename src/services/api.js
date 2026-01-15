@@ -62,7 +62,9 @@ export const commentsAPI = {
   getByPost: (postId) => api.get(`/posts/${postId}/comments`),
   create: (postId, data) => api.post(`/posts/${postId}/comments`, data),
   delete: (postId, commentId) => api.delete(`/posts/${postId}/comments/${commentId}`),
+  update: (postId, commentId, data) => api.put(`/posts/${postId}/comments/${commentId}`, data),
 };
+
 
 // API для управления профилем
 export const profileAPI = {
@@ -74,7 +76,7 @@ export const profileAPI = {
   // Avatar management (ДОБАВЛЕНО)
   addAvatar: (dataUrl) => api.post('/admin/users/profile/avatar', { dataUrl }),
   deleteAvatar: (avatarId) => api.delete(`/admin/users/profile/avatar/${avatarId}`),
-  setActiveAvatar: (avatarId) => api.put('/admin/users/profile/avatar/active', { avatarId }),
+  setActiveAvatar: (avatarId) => api.put(`/admin/users/profile/avatar/active/${avatarId}`),
   getUserAvatar: (userId) => api.get(`/admin/users/${userId}/avatar`),
 };
 
