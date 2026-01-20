@@ -228,9 +228,9 @@ const CommentItem = ({
     )}
 
     {/* Replies - существующий код с новыми пропсами */}
-    {comment.replies && comment.replies.length > 0 && (
+    {comment.replies?.length > 0 && (
       <div style={{ marginTop: '0.75rem' }}>
-      {comment.replies.map(reply => (
+      {comment.replies?.map(reply => (
         <CommentItem
         key={reply.commentId}
         comment={reply}
@@ -317,7 +317,7 @@ export default function PostView() {
   const loadComments = async () => {
     try {
       const response = await commentsAPI.getByPost(postId);
-      setComments(response.data.comments);
+      setComments(response.data.comments || []);
     } catch (error) {
       console.error('Failed to load comments:', error);
     }
@@ -327,7 +327,7 @@ export default function PostView() {
     try {
       const response = await profileAPI.getProfile();
       const profile = response.data;
-      setAvatars(profile.avatars);
+      setAvatars(profile.avatars || []);
       setDefaultAvatarId(profile.activeAvatarId);
       setSelectedCommentAvatarId(profile.activeAvatarId);
     } catch (err) {
@@ -500,7 +500,7 @@ export default function PostView() {
     }, 0);
   };
 
-  const commentTree = buildCommentTree(comments);
+  const commentTree = buildCommentTree(comments || []);
   const totalCommentsCount = countAllComments(commentTree);
 
 
@@ -583,7 +583,7 @@ export default function PostView() {
         <div className="comment-form" id="comment-form">
         <h3>Добавить комментарий</h3>
         <form onSubmit={handleAddComment}>
-        {avatars.length === 0 ? null : (
+        {avatars?.length === 0 ? null : (
           <div style={{ marginBottom: '15px' }}>
           <label
           style={{
@@ -595,7 +595,7 @@ export default function PostView() {
           Аватар для комментария:
           </label>
           <div className="avatar-selector">
-          {avatars.map((avatar) => (
+          {avatars?.map((avatar) => (
             <div
             key={avatar.avatarId}
             className={`avatar-option ${
@@ -643,10 +643,10 @@ export default function PostView() {
   : `${totalCommentsCount} комментариев`}
   </h3>
 
-  {commentTree.length === 0 ? (
+  {commentTree?.length === 0 ? (
     <div className="no-comments">Пока нет комментариев</div>
   ) : (
-    commentTree.map(comment => (
+    commentTree?.map(comment => (
       <CommentItem
       key={comment.commentId}
       comment={comment}
