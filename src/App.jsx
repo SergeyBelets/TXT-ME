@@ -36,7 +36,6 @@ export default function App() {
 
     {/* Динамические роуты */}
     <Route path="/posts/:postId/edit" element={<EditPost />} />
-    <Route path="/post/:postId" element={<PostView />} />
     <Route path="/posts/:postId" element={<PostView />} />
 
     {/* Редирект для всего остального */}

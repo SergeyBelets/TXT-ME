@@ -510,7 +510,7 @@ export default function PostView() {
     <div className="post-navigation">
     {prevPost && (
       <Link to={`/posts/${prevPost.postId}`} className="nav-link">
-      ← Предыдущий пост
+      ← Следующий пост
       </Link>
     )}
     <Link to="/" className="nav-link center">
@@ -518,7 +518,7 @@ export default function PostView() {
     </Link>
     {nextPost && (
       <Link to={`/posts/${nextPost.postId}`} className="nav-link">
-      Следующий пост →
+      Предыдущий пост →
       </Link>
     )}
     </div>
@@ -680,7 +680,7 @@ export default function PostView() {
   <div className="post-navigation">
   {prevPost && (
     <Link to={`/posts/${prevPost.postId}`} className="nav-link">
-    ← Предыдущий пост
+    ← Следующий пост
     </Link>
   )}
   <Link to="/" className="nav-link center">
@@ -688,7 +688,7 @@ export default function PostView() {
   </Link>
   {nextPost && (
     <Link to={`/posts/${nextPost.postId}`} className="nav-link">
-    Следующий пост →
+    Предыдущий пост →
     </Link>
   )}
   </div>
