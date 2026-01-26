@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { profileAPI } from '../services/api';
 import { useAuth } from '../utils/AuthContext';
-
+import AvatarPickerShell from '../components/AvatarPickerShell';
+import UndoToast from '../components/UndoToast';
+import ErrorModal from '../components/ErrorModal';
+import { saveAvatarRecent } from '../utils/avatarRecents';
+import { getAvatarFallbackDataUrl } from '../utils/avatarFallback';
+import { resizeAvatarImage } from '../utils/avatarUpload';
 
 export default function ProfileEdit() {
   const [profile, setProfile] = useState(null);
@@ -24,6 +29,11 @@ export default function ProfileEdit() {
   const [avatars, setAvatars] = useState([]);
   const [activeAvatarId, setActiveAvatarId] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [toastState, setToastState] = useState(null);
+  const [uploadError, setUploadError] = useState('');
+  const [showUploadErrorModal, setShowUploadErrorModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const uploadInputId = useId();
 
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -113,55 +123,49 @@ export default function ProfileEdit() {
 
   // ============ AVATARS ============
 
-  // Ресайз изображения в 50x50
-  const resizeImage = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = (e) => {
-        const img = new Image();
-
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = 50;
-          canvas.height = 50;
-          const ctx = canvas.getContext('2d');
-
-          // Масштабируем с сохранением пропорций и центрируем
-          const scale = Math.max(50 / img.width, 50 / img.height);
-          const x = (50 / 2) - (img.width / 2) * scale;
-          const y = (50 / 2) - (img.height / 2) * scale;
-
-          ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-          resolve(canvas.toDataURL('image/jpeg', 0.8));
-        };
-
-        img.onerror = reject;
-        img.src = e.target.result;
-      };
-
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
   const handleUploadAvatar = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
     setError('');
+    setUploadError('');
+    setUploadFile(file);
 
     try {
-      const dataUrl = await resizeImage(file);
+      const dataUrl = await resizeAvatarImage(file);
       await profileAPI.addAvatar(dataUrl);
       setSuccess('Аватар загружен');
       fetchProfile();
+      setUploadFile(null);
     } catch (err) {
-      setError(err.response?.data?.error || 'Ошибка загрузки аватара');
+      const message = err.response?.data?.error || 'Ошибка загрузки аватара';
+      setError(message);
+      setUploadError(message);
+      setShowUploadErrorModal(true);
     } finally {
       setUploading(false);
       e.target.value = ''; // Сброс input
+    }
+  };
+
+  const handleRetryUpload = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    setUploadError('');
+    try {
+      const dataUrl = await resizeAvatarImage(uploadFile);
+      await profileAPI.addAvatar(dataUrl);
+      setSuccess('Аватар загружен');
+      fetchProfile();
+      setUploadFile(null);
+      setShowUploadErrorModal(false);
+    } catch (err) {
+      const message = err.response?.data?.error || 'Ошибка загрузки аватара';
+      setError(message);
+      setUploadError(message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -179,7 +183,25 @@ export default function ProfileEdit() {
 
   const handleSetActive = async (avatarId) => {
     try {
+      const previousAvatarId = activeAvatarId;
       await profileAPI.setActiveAvatar(avatarId);
+      saveAvatarRecent(avatarId);
+      setSuccess('Активный аватар изменён');
+      fetchProfile();
+      setToastState({ previousAvatarId });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Ошибка установки активного аватара');
+    }
+  };
+
+  const handleUndoActiveAvatar = async () => {
+    if (!toastState) return;
+    const { previousAvatarId } = toastState;
+    setToastState(null);
+    if (!previousAvatarId) return;
+    try {
+      await profileAPI.setActiveAvatar(previousAvatarId);
+      saveAvatarRecent(previousAvatarId);
       setSuccess('Активный аватар изменён');
       fetchProfile();
     } catch (err) {
@@ -187,9 +209,17 @@ export default function ProfileEdit() {
     }
   };
 
+  const handleAvatarError = (event, avatarId) => {
+    const target = event.currentTarget;
+    if (target.dataset.fallbackApplied) return;
+    target.dataset.fallbackApplied = 'true';
+    target.src = getAvatarFallbackDataUrl(avatarId);
+  };
+
+  const selectedAvatar = avatars.find((avatar) => avatar.avatarId === activeAvatarId) || null;
+
   if (loading) return <div className="container">Загрузка...</div>;
   if (!profile) return <div className="container">Пожалуйста, войдите заново для загрузки профиля</div>;
-
 
   return (
     <div className="profile-edit">
@@ -207,65 +237,109 @@ export default function ProfileEdit() {
     <p><strong>Дата регистрации:</strong> {new Date(profile.createdAt).toLocaleDateString('ru-RU')}</p>
     </div>
     </section>
+    {toastState && (
+      <UndoToast
+      message="Changed"
+      onUndo={handleUndoActiveAvatar}
+      onClose={() => setToastState(null)}
+      />
+    )}
+    {showUploadErrorModal && (
+      <ErrorModal
+      title="Загрузка не удалась"
+      message={uploadError || 'Ошибка загрузки аватара'}
+      onRetry={handleRetryUpload}
+      onClose={() => setShowUploadErrorModal(false)}
+      />
+    )}
 
     {/* АВАТАРЫ */}
     <section className="profile-section">
     <h2>Аватары ({avatars.length}/50)</h2>
 
-    <div className="avatar-upload">
-    <input
-    type="file"
-    accept="image/*"
-    onChange={handleUploadAvatar}
-    disabled={uploading || avatars.length >= 50}
-    id="avatar-input"
-    style={{ display: 'none' }}
-    />
-    <label
-    htmlFor="avatar-input"
-    className={`btn btn-primary ${(uploading || avatars.length >= 50) ? 'disabled' : ''}`}
+    <AvatarPickerShell
+    label="Управление аватарами"
+    triggerText="Управлять аватарами"
+    selectedAvatar={selectedAvatar}
+    selectedAvatarId={activeAvatarId}
     >
-    {uploading ? '⏳ Загрузка...' : '➕ Загрузить аватар'}
-    </label>
+    {() => (
+      <>
+      <div className="avatar-upload avatar-upload-inline">
+      <input
+      type="file"
+      accept="image/*"
+      onChange={handleUploadAvatar}
+      disabled={uploading || avatars.length >= 50}
+      id={uploadInputId}
+      style={{ display: 'none' }}
+      />
+      <label
+      htmlFor={uploadInputId}
+      className={`btn ${avatars.length > 0 ? '' : 'btn-primary'} ${(uploading || avatars.length >= 50) ? 'disabled' : ''}`}
+      >
+      {uploading
+        ? '⏳ Загрузка...'
+        : avatars.length > 0
+          ? '➕ Загрузить новый'
+          : '➕ Загрузить аватар'}
+      </label>
+      {uploadError && <div className="avatar-upload-error">{uploadError}</div>}
+      {uploadError && (
+        <button type="button" className="btn btn-small" onClick={handleRetryUpload}>
+        Повторить
+        </button>
+      )}
 
-    {avatars.length >= 50 && (
-      <p className="warning" style={{ marginTop: '10px' }}>
-      Достигнут лимит: 50 аватаров
-      </p>
-    )}
-    </div>
-
-    {avatars.length > 0 && (
-      <div className="avatars-grid">
-      {avatars.map((avatar) => (
-        <div
-        key={avatar.avatarId}
-        className={`avatar-item ${avatar.avatarId === activeAvatarId ? 'active' : ''}`}
-        >
-        <img src={avatar.dataUrl} alt="Avatar" />
-
-        {avatar.avatarId === activeAvatarId ? (
-          <div className="avatar-badge">✓ Активный</div>
-        ) : (
-          <div className="avatar-actions">
-          <button
-          onClick={() => handleSetActive(avatar.avatarId)}
-          className="btn-small"
-          >
-          Активировать
-          </button>
-          <button
-          onClick={() => handleDeleteAvatar(avatar.avatarId)}
-          className="btn-small btn-danger"
-          >
-          Удалить
-          </button>
-          </div>
-        )}
-        </div>
-      ))}
+      {avatars.length >= 50 && (
+        <p className="warning" style={{ marginTop: '10px' }}>
+        Достигнут лимит: 50 аватаров
+        </p>
+      )}
       </div>
+
+      {avatars.length === 0 && (
+        <div className="avatar-empty">Нет аватаров</div>
+      )}
+
+      {avatars.length > 0 && (
+        <div className="avatars-grid">
+        {avatars.map((avatar) => (
+          <div
+          key={avatar.avatarId}
+          className={`avatar-item ${avatar.avatarId === activeAvatarId ? 'active' : ''}`}
+          >
+          <img
+          src={avatar.dataUrl}
+          alt="Avatar"
+          onError={(event) => handleAvatarError(event, avatar.avatarId)}
+          />
+
+          {avatar.avatarId === activeAvatarId ? (
+            <div className="avatar-badge">✓ Активный</div>
+          ) : (
+            <div className="avatar-actions">
+            <button
+            onClick={() => handleSetActive(avatar.avatarId)}
+            className="btn-small"
+            >
+            Активировать
+            </button>
+            <button
+            onClick={() => handleDeleteAvatar(avatar.avatarId)}
+            className="btn-small btn-danger"
+            >
+            Удалить
+            </button>
+            </div>
+          )}
+          </div>
+        ))}
+        </div>
+      )}
+      </>
     )}
+    </AvatarPickerShell>
     </section>
 
     {/* EMAIL */}

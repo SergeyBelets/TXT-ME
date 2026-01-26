@@ -32,7 +32,7 @@ function MarkdownRenderer({ content, postId }) {
     rehypePlugins={[rehypeRaw, rehypeSanitize]}
     components={{
       // Обработка mentions (@username)
-      p: ({ node, children }) => {
+      p: ({ children }) => {
         const processedChildren = React.Children.map(children, (child) => {
           if (typeof child === 'string') {
             const parts = child.split(/(@\w+)/g);
@@ -53,9 +53,7 @@ function MarkdownRenderer({ content, postId }) {
         return <p>{processedChildren}</p>;
       },
       // Открываем ссылки в новой вкладке
-      a: ({ node, ...props }) => (
-        <a {...props} target="_blank" rel="noopener noreferrer" />
-      ),
+      a: (props) => <a {...props} target="_blank" rel="noopener noreferrer" />,
     }}
     >
     {cleanContent}

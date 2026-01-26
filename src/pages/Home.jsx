@@ -40,7 +40,7 @@ export default function Home() {
             const commentsResponse = await commentsAPI.getByPost(post.postId);
             const totalComments = commentsResponse.data.comments?.length || 0;
             return { ...post, totalComments };
-          } catch (error) {
+          } catch {
             return { ...post, totalComments: 0 };
           }
         })

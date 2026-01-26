@@ -1,28 +1,26 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useState } from 'react';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Загрузка из localStorage при старте
+  const [user, setUser] = useState(() => {
     const token = localStorage.getItem('token');
     const savedUserId = localStorage.getItem('userId');
     const savedUsername = localStorage.getItem('username');
     const savedRole = localStorage.getItem('role');
 
     if (token && savedUserId && savedUsername) {
-      setUser({
+      return {
         token,
         userId: savedUserId,
         username: savedUsername,
         role: savedRole || null
-      });
+      };
     }
-    setIsLoading(false);
-  }, []);
+    return null;
+  });
+  const [isLoading] = useState(false);
 
   const login = (token, userId = null, username = null, role = null) => {
     localStorage.setItem('token', token);

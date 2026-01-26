@@ -1,8 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useId } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { postsAPI, profileAPI } from '../services/api';
 import { useAuth } from '../utils/AuthContext';
 import MarkdownEditor from '../components/MarkdownEditor';
+import AvatarPickerShell from '../components/AvatarPickerShell';
+import UndoToast from '../components/UndoToast';
+import ErrorModal from '../components/ErrorModal';
+import { getAvatarRecents, resolveAvatarRecents, saveAvatarRecent } from '../utils/avatarRecents';
+import { getAvatarFallbackDataUrl } from '../utils/avatarFallback';
+import { getAvatarLabel } from '../utils/avatarLabel';
+import { resizeAvatarImage } from '../utils/avatarUpload';
 
 export default function EditPost() {
   const { postId } = useParams();
@@ -20,17 +27,17 @@ export default function EditPost() {
   const [avatars, setAvatars] = useState([]);
   const [selectedAvatarId, setSelectedAvatarId] = useState(null);
   const [defaultAvatarId, setDefaultAvatarId] = useState(null);
+  const [recentAvatarIds, setRecentAvatarIds] = useState([]);
+  const [avatarSearch, setAvatarSearch] = useState('');
+  const [avatarLoadError, setAvatarLoadError] = useState('');
+  const [toastState, setToastState] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [showUploadErrorModal, setShowUploadErrorModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const uploadInputId = useId();
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      loadPost();
-      loadAvatars();
-    } else if (!authLoading && !user) {
-      navigate('/login');
-    }
-  }, [postId, user, authLoading]);
-
-  const loadPost = async () => {
+  const loadPost = useCallback(async () => {
     try {
       const response = await postsAPI.getById(postId);
       const loadedPost = response.data.post;
@@ -51,18 +58,30 @@ export default function EditPost() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate, postId, user]);
 
-  const loadAvatars = async () => {
+  const loadAvatars = useCallback(async () => {
+    setAvatarLoadError('');
     try {
       const response = await profileAPI.getProfile();
       const profile = response.data;
       setAvatars(profile.avatars || []);
       setDefaultAvatarId(profile.activeAvatarId);
+      setRecentAvatarIds(getAvatarRecents());
     } catch (err) {
       console.error('Failed to load avatars:', err);
+      setAvatarLoadError('Не удалось загрузить аватары');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      loadPost();
+      loadAvatars();
+    } else if (!authLoading && !user) {
+      navigate('/login');
+    }
+  }, [authLoading, loadAvatars, loadPost, navigate, user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -88,6 +107,75 @@ export default function EditPost() {
       setError(err.response?.data?.error || 'Failed to update post');
     }
   };
+
+  const handleSelectAvatar = (avatarId) => {
+    if (Object.is(avatarId, selectedAvatarId)) return;
+    const previousAvatarId = selectedAvatarId;
+    setSelectedAvatarId(avatarId);
+    if (avatarId) {
+      setRecentAvatarIds(saveAvatarRecent(avatarId));
+    }
+    setToastState({ previousAvatarId });
+  };
+
+  const handleAvatarError = (event, avatarId) => {
+    const target = event.currentTarget;
+    if (target.dataset.fallbackApplied) return;
+    target.dataset.fallbackApplied = 'true';
+    target.src = getAvatarFallbackDataUrl(avatarId);
+  };
+
+  const handleUploadAvatar = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAvatar(true);
+    setUploadError('');
+    setUploadFile(file);
+    try {
+      const dataUrl = await resizeAvatarImage(file);
+      await profileAPI.addAvatar(dataUrl);
+      await loadAvatars();
+      setUploadFile(null);
+    } catch (err) {
+      const message = err.response?.data?.error || 'Ошибка загрузки аватара';
+      setUploadError(message);
+      setShowUploadErrorModal(true);
+    } finally {
+      setUploadingAvatar(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleRetryUpload = async () => {
+    if (!uploadFile) return;
+    setUploadingAvatar(true);
+    setUploadError('');
+    try {
+      const dataUrl = await resizeAvatarImage(uploadFile);
+      await profileAPI.addAvatar(dataUrl);
+      await loadAvatars();
+      setUploadFile(null);
+      setShowUploadErrorModal(false);
+    } catch (err) {
+      const message = err.response?.data?.error || 'Ошибка загрузки аватара';
+      setUploadError(message);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleRetryLoadAvatars = () => {
+    loadAvatars();
+  };
+
+  const normalizedSearch = avatarSearch.trim().toLowerCase();
+  const filteredAvatars = normalizedSearch
+    ? avatars.filter((avatar) =>
+      String(avatar.avatarId || '').toLowerCase().includes(normalizedSearch))
+    : avatars;
+  const recentAvatars = resolveAvatarRecents(recentAvatarIds, avatars);
+  const selectedAvatar = avatars.find((avatar) => avatar.avatarId === selectedAvatarId) || null;
 
   if (authLoading || loading) return <div className="loading">Загрузка...</div>;
   if (!post) return null;
@@ -129,31 +217,176 @@ export default function EditPost() {
     </div>
 
     {/* Выбор аватара */}
-    {avatars.length > 0 && (
-      <div className="form-group">
-      <label>Аватар для поста</label>
-      <div className="avatar-selector">
-      <div
-      className={`avatar-option ${selectedAvatarId === null ? 'selected' : ''}`}
-      onClick={() => setSelectedAvatarId(null)}
+    <div className="form-group">
+    <AvatarPickerShell
+    label="Аватар для поста"
+    triggerText="Выбрать аватар"
+    selectedAvatar={selectedAvatar}
+    selectedAvatarId={selectedAvatarId}
+    >
+    {({ closePicker }) => (
+      <>
+      <div className="avatar-upload-inline">
+      <input
+      type="file"
+      accept="image/*"
+      onChange={handleUploadAvatar}
+      disabled={uploadingAvatar || avatars.length >= 50}
+      id={uploadInputId}
+      style={{ display: 'none' }}
+      />
+      <label
+      htmlFor={uploadInputId}
+      className={`btn ${avatars.length > 0 ? '' : 'btn-primary'} ${(uploadingAvatar || avatars.length >= 50) ? 'disabled' : ''}`}
       >
-      <div className="avatar-none">Без аватара</div>
+      {uploadingAvatar
+        ? '⏳ Загрузка...'
+        : avatars.length > 0
+          ? '➕ Загрузить новый'
+          : '➕ Загрузить аватар'}
+      </label>
+      {uploadError && <div className="avatar-upload-error">{uploadError}</div>}
+      {uploadError && (
+        <button type="button" className="btn btn-small" onClick={handleRetryUpload}>
+        Повторить
+        </button>
+      )}
       </div>
-      {avatars.map((avatar) => (
-        <div
-        key={avatar.avatarId}
-        className={`avatar-option ${selectedAvatarId === avatar.avatarId ? 'selected' : ''}`}
-        onClick={() => setSelectedAvatarId(avatar.avatarId)}
-        >
-        <img src={avatar.dataUrl} alt="Avatar" />
-        {avatar.avatarId === defaultAvatarId && (
-          <span className="avatar-badge">По умолчанию</span>
+
+      {avatarLoadError && (
+        <div className="avatar-load-error">
+        <span>{avatarLoadError}</span>
+        <button type="button" className="btn btn-small" onClick={handleRetryLoadAvatars}>
+        Повторить
+        </button>
+        </div>
+      )}
+
+      {!avatarLoadError && avatars.length === 0 && (
+        <div className="avatar-empty">Нет аватаров</div>
+      )}
+
+      {avatars.length >= 20 && avatars.length > 0 && (
+        <div className="avatar-search">
+        <input
+        type="text"
+        value={avatarSearch}
+        onChange={(e) => setAvatarSearch(e.target.value)}
+        placeholder="Поиск по ID"
+        aria-label="Поиск аватара"
+        />
+        {avatarSearch && (
+          <button
+          type="button"
+          className="btn btn-small"
+          onClick={() => setAvatarSearch('')}
+          >
+          Очистить
+          </button>
         )}
         </div>
-      ))}
-      </div>
-      </div>
+      )}
+      {!avatarSearch && recentAvatars.length > 0 && (
+        <div className="avatar-recents">
+        <div className="avatar-recents-label">Недавние</div>
+        <div className="avatar-selector avatar-recents-row" role="listbox" aria-label="Недавние аватары">
+        {recentAvatars.map((avatar) => {
+          const avatarLabel = getAvatarLabel(avatar.avatarId);
+          return (
+            <div
+            key={`recent-${avatar.avatarId}`}
+            className={`avatar-option ${selectedAvatarId === avatar.avatarId ? 'selected' : ''}`}
+            role="option"
+            tabIndex={0}
+            data-avatar-option="true"
+            aria-selected={selectedAvatarId === avatar.avatarId}
+            onClick={() => {
+              handleSelectAvatar(avatar.avatarId);
+              closePicker();
+            }}
+            >
+            <img
+            src={avatar.dataUrl}
+            alt="Avatar"
+            onError={(event) => handleAvatarError(event, avatar.avatarId)}
+            />
+            <div className="avatar-hover-preview" aria-hidden="true">
+            <img
+            src={avatar.dataUrl}
+            alt=""
+            onError={(event) => handleAvatarError(event, avatar.avatarId)}
+            />
+            <div className="avatar-hover-label">{avatarLabel}</div>
+            </div>
+            {avatar.avatarId === defaultAvatarId && (
+              <span className="avatar-badge">По умолчанию</span>
+            )}
+            </div>
+          );
+        })}
+        </div>
+        </div>
+      )}
+      {avatars.length > 0 && (
+        <>
+        <div className="avatar-selector" role="listbox" aria-label="Все аватары">
+        <div
+        className={`avatar-option ${selectedAvatarId === null ? 'selected' : ''}`}
+        role="option"
+        tabIndex={0}
+        data-avatar-option="true"
+        aria-selected={selectedAvatarId === null}
+        onClick={() => {
+          handleSelectAvatar(null);
+          closePicker();
+        }}
+        >
+        <div className="avatar-none">Без аватара</div>
+        </div>
+        {filteredAvatars.map((avatar) => {
+          const avatarLabel = getAvatarLabel(avatar.avatarId);
+          return (
+            <div
+            key={avatar.avatarId}
+            className={`avatar-option ${selectedAvatarId === avatar.avatarId ? 'selected' : ''}`}
+            role="option"
+            tabIndex={0}
+            data-avatar-option="true"
+            aria-selected={selectedAvatarId === avatar.avatarId}
+            onClick={() => {
+              handleSelectAvatar(avatar.avatarId);
+              closePicker();
+            }}
+            >
+            <img
+            src={avatar.dataUrl}
+            alt="Avatar"
+            onError={(event) => handleAvatarError(event, avatar.avatarId)}
+            />
+            <div className="avatar-hover-preview" aria-hidden="true">
+            <img
+            src={avatar.dataUrl}
+            alt=""
+            onError={(event) => handleAvatarError(event, avatar.avatarId)}
+            />
+            <div className="avatar-hover-label">{avatarLabel}</div>
+            </div>
+            {avatar.avatarId === defaultAvatarId && (
+              <span className="avatar-badge">По умолчанию</span>
+            )}
+            </div>
+          );
+        })}
+        </div>
+        {!avatarLoadError && filteredAvatars.length === 0 && (
+          <div className="avatar-empty">Нет совпадений</div>
+        )}
+        </>
+      )}
+      </>
     )}
+    </AvatarPickerShell>
+    </div>
 
     <div className="form-actions">
     <button type="submit" className="btn btn-primary">
@@ -164,6 +397,24 @@ export default function EditPost() {
     </button>
     </div>
     </form>
+    {toastState && (
+      <UndoToast
+      message="Changed"
+      onUndo={() => {
+        setSelectedAvatarId(toastState.previousAvatarId);
+        setToastState(null);
+      }}
+      onClose={() => setToastState(null)}
+      />
+    )}
+    {showUploadErrorModal && (
+      <ErrorModal
+      title="Загрузка не удалась"
+      message={uploadError || 'Ошибка загрузки аватара'}
+      onRetry={handleRetryUpload}
+      onClose={() => setShowUploadErrorModal(false)}
+      />
+    )}
     </div>
   );
 }

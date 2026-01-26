@@ -28,21 +28,21 @@ export const setAuthModalHandler = (handler) => {
 // Interceptor для обработки 401 ошибок
 api.interceptors.response.use(
   (response) => response,
-                              (error) => {
-                                if (error.response && error.response.status === 401) {
-                                  localStorage.removeItem('token');
-                                  localStorage.removeItem('userId');
-                                  localStorage.removeItem('username');
-                                  localStorage.removeItem('role');
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('userId');
+      localStorage.removeItem('username');
+      localStorage.removeItem('role');
 
-                                  if (authModalHandler) {
-                                    authModalHandler();
-                                  }
+      if (authModalHandler) {
+        authModalHandler();
+      }
 
-                                  error.sessionExpired = true;
-                                }
-                                return Promise.reject(error);
-                              }
+      error.sessionExpired = true;
+    }
+    return Promise.reject(error);
+  },
 );
 
 export const authAPI = {
@@ -65,19 +65,24 @@ export const commentsAPI = {
   update: (postId, commentId, data) => api.put(`/posts/${postId}/comments/${commentId}`, data),
 };
 
-
 // API для управления профилем
 export const profileAPI = {
   getProfile: () => api.get('/admin/users/profile'),
   updateEmail: (email) => api.put('/admin/users/profile/email', { email }),
   deleteEmail: () => api.delete('/admin/users/profile/email'),
-  updatePassword: (oldPassword, newPassword) => api.put('/admin/users/profile/password', { oldPassword, newPassword }),
+  updatePassword: (oldPassword, newPassword) =>
+    api.put('/admin/users/profile/password', { oldPassword, newPassword }),
 
-  // Avatar management (ДОБАВЛЕНО)
+  // Avatar management
   addAvatar: (dataUrl) => api.post('/admin/users/profile/avatar', { dataUrl }),
   deleteAvatar: (avatarId) => api.delete(`/admin/users/profile/avatar/${avatarId}`),
-  setActiveAvatar: (avatarId) => api.put(`/admin/users/profile/avatar/active/${avatarId}`),
-  getUserAvatar: (userId) => api.get(`/admin/users/${userId}/avatar`),
+  setActiveAvatar: (avatarId) => api.put('/admin/users/profile/avatar/active', { avatarId }),
+  getUserAvatar: (userId, avatarId) => {
+    const path = avatarId
+      ? `/admin/users/${userId}/avatars/${avatarId}`
+      : `/admin/users/${userId}/avatars/active`;
+    return api.get(path);
+  },
 };
 
 export default api;

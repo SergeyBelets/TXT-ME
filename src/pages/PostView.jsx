@@ -1,9 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useId } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { postsAPI, commentsAPI, profileAPI } from '../services/api';
 import { useAuth }  from '../utils/AuthContext';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import AvatarDisplay from '../components/AvatarDisplay';
+import AvatarPickerShell from '../components/AvatarPickerShell';
+import UndoToast from '../components/UndoToast';
+import ErrorModal from '../components/ErrorModal';
+import { getAvatarRecents, resolveAvatarRecents, saveAvatarRecent } from '../utils/avatarRecents';
+import { getAvatarFallbackDataUrl } from '../utils/avatarFallback';
+import { getAvatarLabel } from '../utils/avatarLabel';
+import { resizeAvatarImage } from '../utils/avatarUpload';
 
 const CommentItem = ({
   comment,
@@ -16,7 +23,7 @@ const CommentItem = ({
   setReplyText,
   handleAddReply,
   handleDeleteComment,
-  // ✅ НОВЫЕ ПРОПСЫ ДЛЯ РЕДАКТИРОВАНИЯ:
+  // Props for editing
   editingCommentId,
   setEditingCommentId,
   editText,
@@ -24,11 +31,28 @@ const CommentItem = ({
   handleStartEdit,
   handleCancelEdit,
   handleUpdateComment,
+  // Props for avatar picker
   avatars,
+  recentAvatars = [],
+  avatarSearch,
+  setAvatarSearch,
+  avatarLoadError,
+  onRetryLoadAvatars,
+  filteredAvatars = [],
+  handleAvatarError,
+  handleUploadAvatar,
+  uploadingAvatar,
+  uploadError,
+  onRetryUpload,
+  showUploadErrorModal,
+  onCloseUploadError,
   selectedCommentAvatarId,
   setSelectedCommentAvatarId,
   defaultAvatarId
 }) => {
+  const selectedAvatar = avatars.find((avatar) => avatar.avatarId === selectedCommentAvatarId) || null;
+  const uploadInputId = useId();
+
   return (
     <div
     key={comment.commentId}
@@ -55,7 +79,7 @@ const CommentItem = ({
     />
     </div>
     <div style={{ flex: 1 }}>
-    {/* ✅ МЕТА ИНФО С ПОМЕТКОЙ "ОТРЕДАКТИРОВАН" */}
+    {/* Meta info with "edited" mark */}
     <div style={{
       fontSize: '0.875rem',
       color: 'var(--muted-foreground)',
@@ -64,7 +88,7 @@ const CommentItem = ({
     <strong>{comment.username}</strong>
     <span> • </span>
     <span>{new Date(comment.createdAt).toLocaleString('ru-RU')}</span>
-    {/* ✅ ПОМЕТКА "отредактирован" если есть updatedAt */}
+    {/* "edited" mark if updatedAt exists */}
     {comment.updatedAt && comment.updatedAt !== comment.createdAt && (
       <span style={{
         fontStyle: 'italic',
@@ -76,7 +100,7 @@ const CommentItem = ({
     )}
     </div>
 
-    {/* ✅ РЕЖИМ РЕДАКТИРОВАНИЯ */}
+    {/* Edit mode */}
     {editingCommentId === comment.commentId ? (
       <form onSubmit={(e) => handleUpdateComment(e, comment.commentId)}>
       <textarea
@@ -103,12 +127,12 @@ const CommentItem = ({
       </form>
     ) : (
       <>
-      {/* ✅ СОДЕРЖИМОЕ КОММЕНТАРИЯ */}
+      {/* Comment content */}
       <div style={{ marginBottom: '0.75rem' }}>
       <MarkdownRenderer content={comment.content} />
       </div>
 
-      {/* ✅ КНОПКИ: ОТВЕТИТЬ | РЕДАКТИРОВАТЬ | УДАЛИТЬ */}
+      {/* Buttons: Reply | Edit | Delete */}
       <div style={{
         display: 'flex',
         gap: '0.5rem',
@@ -124,7 +148,7 @@ const CommentItem = ({
         </button>
       )}
 
-      {/* ✅ ✅ КНОПКА РЕДАКТИРОВАТЬ (СИНЯЯ, ЛЕВЕЕ УДАЛЕНИЯ) */}
+      {/* Edit button */}
       {user && !isLoading && user.username === comment.username && (
         <button
         onClick={() => handleStartEdit(comment)}
@@ -135,7 +159,7 @@ const CommentItem = ({
         </button>
       )}
 
-      {/* ✅ КНОПКА УДАЛИТЬ (КРАСНАЯ) */}
+      {/* Delete button */}
       {user && !isLoading && (user.username === comment.username || user.role === 'admin') && (
         <button
         onClick={() => handleDeleteComment(comment.commentId)}
@@ -152,46 +176,181 @@ const CommentItem = ({
     </div>
     </div>
 
-    {/* Reply form - существующий код без изменений */}
+    {/* Reply form with AvatarPickerShell */}
     {replyTo === comment.commentId && (
       <div className="reply-form">
       <form onSubmit={(e) => handleAddReply(e, comment.commentId)}>
-      {avatars.length > 0 && (
-        <div style={{ marginBottom: '10px' }}>
-        <label style={{ fontSize: '0.875rem', marginBottom: '5px', display: 'block' }}>
-        Аватар для комментария:
+      <div style={{ marginBottom: '10px' }}>
+      <AvatarPickerShell
+      label="Аватар для комментария"
+      triggerText="Выбрать аватар"
+      selectedAvatar={selectedAvatar}
+      selectedAvatarId={selectedCommentAvatarId}
+      >
+      {({ closePicker }) => (
+        <>
+        <div className="avatar-upload-inline">
+        <input
+        type="file"
+        accept="image/*"
+        onChange={handleUploadAvatar}
+        disabled={uploadingAvatar || avatars.length >= 50}
+        id={`${uploadInputId}-reply`}
+        style={{ display: 'none' }}
+        />
+        <label
+        htmlFor={`${uploadInputId}-reply`}
+        className={`btn ${avatars.length > 0 ? '' : 'btn-primary'} ${(uploadingAvatar || avatars.length >= 50) ? 'disabled' : ''}`}
+        >
+        {uploadingAvatar
+          ? '⏳ Загрузка...'
+          : avatars.length > 0
+            ? '➕ Загрузить новый'
+            : '➕ Загрузить аватар'}
         </label>
-        <div className="avatar-selector">
-        {avatars.map((avatar) => (
-          <div
-          key={avatar.avatarId}
-          className={`avatar-option ${selectedCommentAvatarId === avatar.avatarId ? 'selected' : ''}`}
-          onClick={() => setSelectedCommentAvatarId(avatar.avatarId)}
-          style={{ width: '40px', height: '40px' }}
-          >
-          <img
-          src={avatar.dataUrl}
-          alt="Avatar"
-          style={{ width: '35px', height: '35px' }}
+        {uploadError && <div className="avatar-upload-error">{uploadError}</div>}
+        </div>
+
+        {avatarLoadError && (
+          <div className="avatar-load-error">
+          <span>{avatarLoadError}</span>
+          <button type="button" className="btn btn-small" onClick={onRetryLoadAvatars}>
+          Повторить
+          </button>
+          </div>
+        )}
+
+        {!avatarLoadError && avatars.length === 0 && (
+          <div className="avatar-empty">Нет аватаров</div>
+        )}
+
+        {avatars.length >= 20 && avatars.length > 0 && (
+          <div className="avatar-search">
+          <input
+          type="text"
+          value={avatarSearch}
+          onChange={(e) => setAvatarSearch(e.target.value)}
+          placeholder="Поиск по ID"
+          aria-label="Поиск аватара"
           />
-          {avatar.avatarId === defaultAvatarId && (
-            <span className="avatar-badge" style={{ fontSize: '8px' }}>
-            ✓
-            </span>
+          {avatarSearch && (
+            <button
+            type="button"
+            className="btn btn-small"
+            onClick={() => setAvatarSearch('')}
+            >
+            Очистить
+            </button>
           )}
           </div>
-        ))}
-        <div
-        className={`avatar-option ${selectedCommentAvatarId === null ? 'selected' : ''}`}
-        onClick={() => setSelectedCommentAvatarId(null)}
-        style={{ width: '40px', height: '40px' }}
-        >
-        <div className="avatar-none" style={{ fontSize: '8px' }}>
-        Без аватара
+        )}
+        {!avatarSearch && recentAvatars.length > 0 && (
+          <div className="avatar-recents">
+          <div className="avatar-recents-label">Недавние</div>
+        <div className="avatar-selector avatar-recents-row" role="listbox" aria-label="Недавние аватары">
+        {recentAvatars.map((avatar) => {
+          const avatarLabel = getAvatarLabel(avatar.avatarId);
+          return (
+            <div
+            key={`recent-${avatar.avatarId}`}
+            className={`avatar-option ${
+              selectedCommentAvatarId === avatar.avatarId ? 'selected' : ''
+            }`}
+            role="option"
+            tabIndex={0}
+            data-avatar-option="true"
+            aria-selected={selectedCommentAvatarId === avatar.avatarId}
+            onClick={() => {
+              setSelectedCommentAvatarId(avatar.avatarId);
+              closePicker();
+            }}
+            style={{ width: '40px', height: '40px' }}
+            >
+            <img
+            src={avatar.dataUrl}
+            alt="Avatar"
+            style={{ width: '35px', height: '35px' }}
+            onError={(event) => handleAvatarError(event, avatar.avatarId)}
+            />
+            <div className="avatar-hover-preview" aria-hidden="true">
+            <img
+            src={avatar.dataUrl}
+            alt=""
+            onError={(event) => handleAvatarError(event, avatar.avatarId)}
+            />
+            <div className="avatar-hover-label">{avatarLabel}</div>
+            </div>
+            {avatar.avatarId === defaultAvatarId && (
+              <span className="avatar-badge" style={{ fontSize: '8px' }}>
+              .
+              </span>
+            )}
+            </div>
+          );
+        })}
+          </div>
+          </div>
+        )}
+        {avatars.length > 0 && (
+          <>
+        <div className="avatar-selector" role="listbox" aria-label="Все аватары">
+        {filteredAvatars.map((avatar) => {
+          const avatarLabel = getAvatarLabel(avatar.avatarId);
+          return (
+            <div
+            key={avatar.avatarId}
+            className={`avatar-option ${
+              selectedCommentAvatarId === avatar.avatarId ? 'selected' : ''
+            }`}
+            role="option"
+            tabIndex={0}
+            data-avatar-option="true"
+            aria-selected={selectedCommentAvatarId === avatar.avatarId}
+            onClick={() => {
+              setSelectedCommentAvatarId(avatar.avatarId);
+              closePicker();
+            }}
+            style={{ width: '40px', height: '40px' }}
+            >
+            <img
+            src={avatar.dataUrl}
+            alt="Avatar"
+            style={{ width: '35px', height: '35px' }}
+            onError={(event) => handleAvatarError(event, avatar.avatarId)}
+            />
+            <div className="avatar-hover-preview" aria-hidden="true">
+            <img
+            src={avatar.dataUrl}
+            alt=""
+            onError={(event) => handleAvatarError(event, avatar.avatarId)}
+            />
+            <div className="avatar-hover-label">{avatarLabel}</div>
+            </div>
+            {avatar.avatarId === defaultAvatarId && (
+              <span className="avatar-badge" style={{ fontSize: '8px' }}>
+              .
+              </span>
+            )}
+            </div>
+          );
+        })}
+          </div>
+          {!avatarLoadError && filteredAvatars.length === 0 && (
+            <div className="avatar-empty">Нет совпадений</div>
+          )}
+          </>
+        )}
+        </>
+      )}
+        </AvatarPickerShell>
         </div>
-        </div>
-        </div>
-        </div>
+      {showUploadErrorModal && (
+        <ErrorModal
+        title="Загрузка не удалась"
+        message={uploadError || 'Ошибка загрузки аватара'}
+        onRetry={onRetryUpload}
+        onClose={onCloseUploadError}
+        />
       )}
 
       <textarea
@@ -227,7 +386,7 @@ const CommentItem = ({
       </div>
     )}
 
-    {/* Replies - существующий код с новыми пропсами */}
+    {/* Replies */}
     {comment.replies?.length > 0 && (
       <div style={{ marginTop: '0.75rem' }}>
       {comment.replies?.map(reply => (
@@ -243,7 +402,6 @@ const CommentItem = ({
         setReplyText={setReplyText}
         handleAddReply={handleAddReply}
         handleDeleteComment={handleDeleteComment}
-        // ✅ ПЕРЕДАЕМ ПРОПСЫ ДЛЯ РЕДАКТИРОВАНИЯ
         editingCommentId={editingCommentId}
         setEditingCommentId={setEditingCommentId}
         editText={editText}
@@ -252,6 +410,19 @@ const CommentItem = ({
         handleCancelEdit={handleCancelEdit}
         handleUpdateComment={handleUpdateComment}
         avatars={avatars}
+        recentAvatars={recentAvatars}
+        avatarSearch={avatarSearch}
+        setAvatarSearch={setAvatarSearch}
+        avatarLoadError={avatarLoadError}
+        onRetryLoadAvatars={onRetryLoadAvatars}
+        filteredAvatars={filteredAvatars}
+        handleAvatarError={handleAvatarError}
+        handleUploadAvatar={handleUploadAvatar}
+        uploadingAvatar={uploadingAvatar}
+        uploadError={uploadError}
+        onRetryUpload={onRetryUpload}
+        showUploadErrorModal={showUploadErrorModal}
+        onCloseUploadError={onCloseUploadError}
         selectedCommentAvatarId={selectedCommentAvatarId}
         setSelectedCommentAvatarId={setSelectedCommentAvatarId}
         defaultAvatarId={defaultAvatarId}
@@ -276,34 +447,21 @@ export default function PostView() {
   const [avatars, setAvatars] = useState([]);
   const [selectedCommentAvatarId, setSelectedCommentAvatarId] = useState(null);
   const [defaultAvatarId, setDefaultAvatarId] = useState(null);
-  const [allPosts, setAllPosts] = useState([]);
+  const [recentAvatarIds, setRecentAvatarIds] = useState([]);
+  const [avatarSearch, setAvatarSearch] = useState('');
+  const [avatarLoadError, setAvatarLoadError] = useState('');
+  const [toastState, setToastState] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [showUploadErrorModal, setShowUploadErrorModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const uploadInputId = useId();
   const [prevPost, setPrevPost] = useState(null);
   const [nextPost, setNextPost] = useState(null);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editText, setEditText] = useState('');
 
-
-  useEffect(() => {
-    loadPost();
-    loadComments();
-    if (user) loadAvatars();
-    loadAdjacentPosts();
-    const hash = window.location.hash.substring(1);
-    if (!loading) {
-      setTimeout(() => {
-        const element = document.getElementById(hash);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-        if (hash === 'comment-form') {
-          const textarea = document.querySelector('#comment-form textarea');
-          if (textarea) setTimeout(() => textarea.focus(), 300);
-        }
-      }, 200);
-    }
-  }, [postId, user]);
-
-  const loadPost = async () => {
+  const loadPost = useCallback(async () => {
     try {
       const response = await postsAPI.getById(postId);
       setPost(response.data.post);
@@ -312,41 +470,69 @@ export default function PostView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [postId]);
 
-  const loadComments = async () => {
+  const loadComments = useCallback(async () => {
     try {
       const response = await commentsAPI.getByPost(postId);
       setComments(response.data.comments || []);
     } catch (error) {
       console.error('Failed to load comments:', error);
     }
-  };
+  }, [postId]);
 
-  const loadAvatars = async () => {
+  const loadAvatars = useCallback(async () => {
+    setAvatarLoadError('');
     try {
       const response = await profileAPI.getProfile();
       const profile = response.data;
       setAvatars(profile.avatars || []);
       setDefaultAvatarId(profile.activeAvatarId);
       setSelectedCommentAvatarId(profile.activeAvatarId);
+      setRecentAvatarIds(getAvatarRecents());
     } catch (err) {
       console.error('Failed to load avatars:', err);
+      setAvatarLoadError('Не удалось загрузить аватары');
     }
-  };
+  }, []);
 
-  const loadAdjacentPosts = async () => {
+  const loadAdjacentPosts = useCallback(async () => {
     try {
       const response = await postsAPI.getAll({ limit: 100 });
       const allPostsData = response.data.posts;
-      setAllPosts(allPostsData);
       const currentIndex = allPostsData.findIndex(p => p.postId === postId);
       setPrevPost(currentIndex > 0 ? allPostsData[currentIndex - 1] : null);
       setNextPost(currentIndex < allPostsData.length - 1 ? allPostsData[currentIndex + 1] : null);
     } catch (error) {
       console.error('Failed to load adjacent posts:', error);
     }
-  };
+  }, [postId]);
+
+  useEffect(() => {
+    loadPost();
+    loadComments();
+    if (user) {
+      loadAvatars();
+    }
+    loadAdjacentPosts();
+  }, [loadAdjacentPosts, loadAvatars, loadComments, loadPost, user]);
+
+  useEffect(() => {
+    if (loading) return;
+    const hash = window.location.hash.substring(1);
+    if (!hash) return;
+
+    setTimeout(() => {
+      const element = document.getElementById(hash);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      if (hash === 'comment-form') {
+        const textarea = document.querySelector('#comment-form textarea');
+        if (textarea) setTimeout(() => textarea.focus(), 300);
+      }
+    }, 200);
+  }, [loading, postId]);
 
   const handleAddComment = async (e) => {
     e.preventDefault();
@@ -399,19 +585,19 @@ export default function PostView() {
     }
   };
 
-  // Функция для начала редактирования
+  // Start editing a comment
   const handleStartEdit = (comment) => {
     setEditingCommentId(comment.commentId);
     setEditText(comment.content);
   };
 
-  // Функция для отмены редактирования
+  // Cancel editing
   const handleCancelEdit = () => {
     setEditingCommentId(null);
     setEditText('');
   };
 
-  // Функция для сохранения изменений
+  // Save edited comment
   const handleUpdateComment = async (e, commentId) => {
     e.preventDefault();
     if (!editText.trim()) return;
@@ -420,13 +606,12 @@ export default function PostView() {
       await commentsAPI.update(postId, commentId, { content: editText });
       setEditingCommentId(null);
       setEditText('');
-      loadComments();  // Перезагружаем комментарии
+      loadComments();
     } catch (error) {
       console.error('Update comment error:', error);
       alert('Не удалось обновить комментарий');
     }
   };
-
 
   const handleDeletePost = async () => {
     if (!confirm('Удалить пост?')) return;
@@ -440,27 +625,72 @@ export default function PostView() {
     }
   };
 
+  const handleSelectCommentAvatar = (avatarId) => {
+    if (avatarId === selectedCommentAvatarId) return;
+    const previousAvatarId = selectedCommentAvatarId;
+    setSelectedCommentAvatarId(avatarId);
+    if (avatarId) {
+      setRecentAvatarIds(saveAvatarRecent(avatarId));
+    }
+    setToastState({ previousAvatarId });
+  };
+
+  const handleAvatarError = (event, avatarId) => {
+    const target = event.currentTarget;
+    if (target.dataset.fallbackApplied) return;
+    target.dataset.fallbackApplied = 'true';
+    target.src = getAvatarFallbackDataUrl(avatarId);
+  };
+
+  const handleRetryLoadAvatars = () => {
+    loadAvatars();
+  };
+
+  const handleUploadAvatar = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAvatar(true);
+    setUploadError('');
+    setUploadFile(file);
+    try {
+      const dataUrl = await resizeAvatarImage(file);
+      await profileAPI.addAvatar(dataUrl);
+      await loadAvatars();
+      setUploadFile(null);
+    } catch (err) {
+      const message = err.response?.data?.error || 'Ошибка загрузки аватара';
+      setUploadError(message);
+      setShowUploadErrorModal(true);
+    } finally {
+      setUploadingAvatar(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleRetryUpload = async () => {
+    if (!uploadFile) return;
+    setUploadingAvatar(true);
+    setUploadError('');
+    try {
+      const dataUrl = await resizeAvatarImage(uploadFile);
+      await profileAPI.addAvatar(dataUrl);
+      await loadAvatars();
+      setUploadFile(null);
+      setShowUploadErrorModal(false);
+    } catch (err) {
+      const message = err.response?.data?.error || 'Ошибка загрузки аватара';
+      setUploadError(message);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleShare = () => {
     const url = window.location.href;
     navigator.clipboard.writeText(url)
     .then(() => alert('Ссылка скопирована!'))
     .catch(() => alert('Ошибка копирования'));
-  };
-
-  const scrollToComments = () => {
-    const commentsSection = document.querySelector('.comments-section');
-    if (commentsSection) {
-      commentsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const scrollToCommentForm = () => {
-    const form = document.getElementById('comment-form');
-    if (form) {
-      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      const textarea = form.querySelector('textarea');
-      if (textarea) setTimeout(() => textarea.focus(), 300);
-    }
   };
 
   const buildCommentTree = (comments) => {
@@ -502,12 +732,20 @@ export default function PostView() {
 
   const commentTree = buildCommentTree(comments || []);
   const totalCommentsCount = countAllComments(commentTree);
+  const recentAvatars = resolveAvatarRecents(recentAvatarIds, avatars);
+  const normalizedSearch = avatarSearch.trim().toLowerCase();
+  const filteredAvatars = normalizedSearch
+    ? avatars.filter((avatar) =>
+      String(avatar.avatarId || '').toLowerCase().includes(normalizedSearch))
+    : avatars;
+  const selectedAvatar = avatars.find((avatar) => avatar.avatarId === selectedCommentAvatarId) || null;
 
 
   return (
+    <>
     <div className="post-view">
-    {/* Навигация сверху */}
-    <div className="post-navigation">
+    {/* Top navigation */}
+      <div className="post-navigation">
     {prevPost && (
       <Link to={`/posts/${prevPost.postId}`} className="nav-link">
       ← Следующий пост
@@ -583,35 +821,175 @@ export default function PostView() {
         <div className="comment-form" id="comment-form">
         <h3>Добавить комментарий</h3>
         <form onSubmit={handleAddComment}>
-        {avatars?.length === 0 ? null : (
-          <div style={{ marginBottom: '15px' }}>
+        <div style={{ marginBottom: '15px' }}>
+        <AvatarPickerShell
+        label="Аватар для комментария"
+        triggerText="Выбрать аватар"
+        selectedAvatar={selectedAvatar}
+        selectedAvatarId={selectedCommentAvatarId}
+        >
+        {({ closePicker }) => (
+          <>
+          <div className="avatar-upload-inline">
+          <input
+          type="file"
+          accept="image/*"
+          onChange={handleUploadAvatar}
+          disabled={uploadingAvatar || avatars.length >= 50}
+          id={`${uploadInputId}-comment`}
+          style={{ display: 'none' }}
+          />
           <label
-          style={{
-            fontSize: '0.875rem',
-            marginBottom: '8px',
-            display: 'block'
-          }}
+          htmlFor={`${uploadInputId}-comment`}
+          className={`btn ${avatars.length > 0 ? '' : 'btn-primary'} ${(uploadingAvatar || avatars.length >= 50) ? 'disabled' : ''}`}
           >
-          Аватар для комментария:
+          {uploadingAvatar
+            ? '⏳ Загрузка...'
+            : avatars.length > 0
+              ? '➕ Загрузить новый'
+              : '➕ Загрузить аватар'}
           </label>
-          <div className="avatar-selector">
-          {avatars?.map((avatar) => (
-            <div
-            key={avatar.avatarId}
-            className={`avatar-option ${
-              selectedCommentAvatarId === avatar.avatarId ? 'selected' : ''
-            }`}
-            onClick={() => setSelectedCommentAvatarId(avatar.avatarId)}
-            >
-            <img src={avatar.dataUrl} alt="Avatar" />
-            {avatar.avatarId === defaultAvatarId && (
-              <span className="avatar-badge">•</span>
+          {uploadError && <div className="avatar-upload-error">{uploadError}</div>}
+          {uploadError && (
+            <button type="button" className="btn btn-small" onClick={handleRetryUpload}>
+            Повторить
+            </button>
+          )}
+          </div>
+
+          {avatarLoadError && (
+            <div className="avatar-load-error">
+            <span>{avatarLoadError}</span>
+            <button type="button" className="btn btn-small" onClick={handleRetryLoadAvatars}>
+            Повторить
+            </button>
+            </div>
+          )}
+
+          {!avatarLoadError && avatars.length === 0 && (
+            <div className="avatar-empty">Нет аватаров</div>
+          )}
+
+          {avatars.length >= 20 && avatars.length > 0 && (
+            <div className="avatar-search">
+            <input
+            type="text"
+            value={avatarSearch}
+            onChange={(e) => setAvatarSearch(e.target.value)}
+            placeholder="Поиск по ID"
+            aria-label="Поиск аватара"
+            />
+            {avatarSearch && (
+              <button
+              type="button"
+              className="btn btn-small"
+              onClick={() => setAvatarSearch('')}
+              >
+              Очистить
+              </button>
             )}
             </div>
-          ))}
-          </div>
-          </div>
+          )}
+          {!avatarSearch && recentAvatars.length > 0 && (
+            <div className="avatar-recents">
+            <div className="avatar-recents-label">Недавние</div>
+          <div className="avatar-selector avatar-recents-row" role="listbox" aria-label="Недавние аватары">
+          {recentAvatars.map((avatar) => {
+            const avatarLabel = getAvatarLabel(avatar.avatarId);
+            return (
+              <div
+              key={`recent-${avatar.avatarId}`}
+              className={`avatar-option ${
+                selectedCommentAvatarId === avatar.avatarId ? 'selected' : ''
+              }`}
+              role="option"
+              tabIndex={0}
+              data-avatar-option="true"
+              aria-selected={selectedCommentAvatarId === avatar.avatarId}
+              onClick={() => {
+                handleSelectCommentAvatar(avatar.avatarId);
+                closePicker();
+              }}
+              >
+              <img
+              src={avatar.dataUrl}
+              alt="Avatar"
+              onError={(event) => handleAvatarError(event, avatar.avatarId)}
+              />
+              <div className="avatar-hover-preview" aria-hidden="true">
+              <img
+              src={avatar.dataUrl}
+              alt=""
+              onError={(event) => handleAvatarError(event, avatar.avatarId)}
+              />
+              <div className="avatar-hover-label">{avatarLabel}</div>
+              </div>
+              {avatar.avatarId === defaultAvatarId && (
+                <span className="avatar-badge">•</span>
+              )}
+              </div>
+            );
+          })}
+            </div>
+            </div>
+          )}
+          {avatars.length > 0 && (
+            <>
+          <div className="avatar-selector" role="listbox" aria-label="Все аватары">
+          {filteredAvatars.map((avatar) => {
+            const avatarLabel = getAvatarLabel(avatar.avatarId);
+            return (
+              <div
+              key={avatar.avatarId}
+              className={`avatar-option ${
+                selectedCommentAvatarId === avatar.avatarId ? 'selected' : ''
+              }`}
+              role="option"
+              tabIndex={0}
+              data-avatar-option="true"
+              aria-selected={selectedCommentAvatarId === avatar.avatarId}
+              onClick={() => {
+                handleSelectCommentAvatar(avatar.avatarId);
+                closePicker();
+              }}
+              >
+              <img
+              src={avatar.dataUrl}
+              alt="Avatar"
+              onError={(event) => handleAvatarError(event, avatar.avatarId)}
+              />
+              <div className="avatar-hover-preview" aria-hidden="true">
+              <img
+              src={avatar.dataUrl}
+              alt=""
+              onError={(event) => handleAvatarError(event, avatar.avatarId)}
+              />
+              <div className="avatar-hover-label">{avatarLabel}</div>
+              </div>
+              {avatar.avatarId === defaultAvatarId && (
+                <span className="avatar-badge">•</span>
+              )}
+              </div>
+            );
+          })}
+            </div>
+            {!avatarLoadError && filteredAvatars.length === 0 && (
+              <div className="avatar-empty">Нет совпадений</div>
+            )}
+            </>
+          )}
+          </>
         )}
+        </AvatarPickerShell>
+        </div>
+      {showUploadErrorModal && (
+        <ErrorModal
+        title="Загрузка не удалась"
+        message={uploadError || 'Ошибка загрузки аватара'}
+        onRetry={handleRetryUpload}
+        onClose={() => setShowUploadErrorModal(false)}
+        />
+      )}
         <textarea
         value={newComment}
         onChange={(e) => setNewComment(e.target.value)}
@@ -646,37 +1024,49 @@ export default function PostView() {
   {commentTree?.length === 0 ? (
     <div className="no-comments">Пока нет комментариев</div>
   ) : (
-    commentTree?.map(comment => (
-      <CommentItem
-      key={comment.commentId}
-      comment={comment}
-      level={0}
-      user={user}
-      isLoading={isLoading}
-      replyTo={replyTo}
-      setReplyTo={setReplyTo}
-      replyText={replyText}
-      setReplyText={setReplyText}
-      handleAddReply={handleAddReply}
-      handleDeleteComment={handleDeleteComment}
-      // ✅ ✅ НОВЫЕ ПРОПСЫ:
-      editingCommentId={editingCommentId}
-      setEditingCommentId={setEditingCommentId}
-      editText={editText}
-      setEditText={setEditText}
-      handleStartEdit={handleStartEdit}
-      handleCancelEdit={handleCancelEdit}
-      handleUpdateComment={handleUpdateComment}
-      avatars={avatars}
-      selectedCommentAvatarId={selectedCommentAvatarId}
-      setSelectedCommentAvatarId={setSelectedCommentAvatarId}
-      defaultAvatarId={defaultAvatarId}
-      />
-    ))
+      commentTree.map((comment) => (
+        <CommentItem
+        key={comment.commentId}
+        comment={comment}
+        level={0}
+        user={user}
+        isLoading={isLoading}
+        replyTo={replyTo}
+        setReplyTo={setReplyTo}
+        replyText={replyText}
+        setReplyText={setReplyText}
+        handleAddReply={handleAddReply}
+        handleDeleteComment={handleDeleteComment}
+        editingCommentId={editingCommentId}
+        setEditingCommentId={setEditingCommentId}
+        editText={editText}
+        setEditText={setEditText}
+        handleStartEdit={handleStartEdit}
+        handleCancelEdit={handleCancelEdit}
+        handleUpdateComment={handleUpdateComment}
+        avatars={avatars}
+        recentAvatars={recentAvatars}
+        avatarSearch={avatarSearch}
+        setAvatarSearch={setAvatarSearch}
+        avatarLoadError={avatarLoadError}
+        onRetryLoadAvatars={handleRetryLoadAvatars}
+        filteredAvatars={filteredAvatars}
+        handleAvatarError={handleAvatarError}
+        handleUploadAvatar={handleUploadAvatar}
+        uploadingAvatar={uploadingAvatar}
+        uploadError={uploadError}
+        onRetryUpload={handleRetryUpload}
+        showUploadErrorModal={showUploadErrorModal}
+        onCloseUploadError={() => setShowUploadErrorModal(false)}
+        selectedCommentAvatarId={selectedCommentAvatarId}
+        setSelectedCommentAvatarId={handleSelectCommentAvatar}
+        defaultAvatarId={defaultAvatarId}
+        />
+      ))
   )}
   </div>
 
-  {/* Навигация снизу */}
+  {/* Bottom navigation */}
   <div className="post-navigation">
   {prevPost && (
     <Link to={`/posts/${prevPost.postId}`} className="nav-link">
@@ -693,5 +1083,16 @@ export default function PostView() {
   )}
   </div>
   </div>
+  {toastState && (
+    <UndoToast
+    message="Changed"
+    onUndo={() => {
+      setSelectedCommentAvatarId(toastState.previousAvatarId);
+      setToastState(null);
+    }}
+    onClose={() => setToastState(null)}
+    />
+  )}
+  </>
   );
 }
