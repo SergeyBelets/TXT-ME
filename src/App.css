@@ -1763,30 +1763,28 @@ html {
 }
 
 /* --- V2 Feed Styles --- */
-.v2-header {
-  padding: 1rem 1.5rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  margin-bottom: 1.5rem;
+.pagination-container {
+  padding: 1rem 0;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
+  justify-content: center;
 }
 
-.v2-title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: var(--font-weight-medium);
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 800px;
+  gap: 1rem;
 }
 
 .feed-filters-display {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+  flex: 1;
 }
 
 .active-filter {
@@ -1844,9 +1842,10 @@ html {
 }
 
 @media (max-width: 768px) {
-  .v2-header {
-    flex-direction: column;
-    align-items: flex-start;
+  .pagination-controls {
+    flex-direction: row;
+    justify-content: center;
+    gap: 1rem;
   }
 }
 

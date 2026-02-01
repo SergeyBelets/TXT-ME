@@ -103,20 +103,44 @@ export default function PostsV2() {
   };
 
   const Pagination = () => {
-    if (!pageMeta.prevUntil && !pageMeta.nextSince) return null;
+    if (!pageMeta.prevUntil && !pageMeta.nextSince && !tag && !author && !day) return null;
     
     return (
-      <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'center', gap: '2rem', padding: '1rem' }}>
-        {pageMeta.prevUntil && (
-          <Link to={getPaginationUrl({ until: pageMeta.prevUntil })} className="btn btn-secondary">
-            ← Новее
-          </Link>
-        )}
-        {pageMeta.nextSince && (
-          <Link to={getPaginationUrl({ since: pageMeta.nextSince })} className="btn btn-secondary">
-            Старее →
-          </Link>
-        )}
+      <div className="pagination-container">
+        <div className="pagination-controls">
+          {pageMeta.prevUntil ? (
+            <Link to={getPaginationUrl({ until: pageMeta.prevUntil })} className="btn btn-secondary" style={{ minWidth: '100px', textAlign: 'center' }}>
+              ← Новее
+            </Link>
+          ) : <div style={{ minWidth: '100px' }}></div>}
+
+          <div className="feed-filters-display">
+            {tag && (
+              <span className="active-filter">
+                {tag} 
+                <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('tag'); return p; })}>×</button>
+              </span>
+            )}
+            {author && (
+              <span className="active-filter">
+                {author} 
+                <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('author'); return p; })}>×</button>
+              </span>
+            )}
+            {day && (
+              <span className="active-filter">
+                {day} 
+                <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('day'); return p; })}>×</button>
+              </span>
+            )}
+          </div>
+
+          {pageMeta.nextSince ? (
+            <Link to={getPaginationUrl({ since: pageMeta.nextSince })} className="btn btn-secondary" style={{ minWidth: '100px', textAlign: 'center' }}>
+              Старее →
+            </Link>
+          ) : <div style={{ minWidth: '100px' }}></div>}
+        </div>
       </div>
     );
   };
@@ -135,30 +159,6 @@ export default function PostsV2() {
     </button>
 
     <div className="feed">
-    <div className="v2-header">
-      <h1 className="v2-title">Лента (V2)</h1>
-      <div className="feed-filters-display">
-        {tag && (
-          <span className="active-filter">
-            Тег: {tag} 
-            <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('tag'); return p; })}>×</button>
-          </span>
-        )}
-        {author && (
-          <span className="active-filter">
-            Автор: {author} 
-            <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('author'); return p; })}>×</button>
-          </span>
-        )}
-        {day && (
-          <span className="active-filter">
-            День: {day} 
-            <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('day'); return p; })}>×</button>
-          </span>
-        )}
-      </div>
-    </div>
-
     <Pagination />
 
     {posts.length === 0 ? (
