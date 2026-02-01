@@ -156,9 +156,6 @@ export default function PostsV2() {
             <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('day'); return p; })}>×</button>
           </span>
         )}
-        {(tag || author || day || since || until) && (
-          <button className="btn btn-reset" onClick={() => navigate('/posts')}>Сбросить</button>
-        )}
       </div>
     </div>
 
