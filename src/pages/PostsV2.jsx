@@ -135,13 +135,30 @@ export default function PostsV2() {
     </button>
 
     <div className="feed">
-    <div className="v2-header" style={{ padding: '1rem', borderBottom: '1px solid var(--border)', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Лента (V2)</h1>
+    <div className="v2-header">
+      <h1 className="v2-title">Лента (V2)</h1>
       <div className="feed-filters-display">
-        {tag && <span className="active-filter">Тег: {tag} <button onClick={() => setSearchParams(p => { p.delete('tag'); return p; })}>×</button></span>}
-        {author && <span className="active-filter">Автор: {author} <button onClick={() => setSearchParams(p => { p.delete('author'); return p; })}>×</button></span>}
-        {day && <span className="active-filter">День: {day} <button onClick={() => setSearchParams(p => { p.delete('day'); return p; })}>×</button></span>}
-        {(tag || author || day || since || until) && <button onClick={() => navigate('/posts')} style={{ marginLeft: '0.5rem', fontSize: '0.8rem' }}>Сбросить</button>}
+        {tag && (
+          <span className="active-filter">
+            Тег: {tag} 
+            <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('tag'); return p; })}>×</button>
+          </span>
+        )}
+        {author && (
+          <span className="active-filter">
+            Автор: {author} 
+            <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('author'); return p; })}>×</button>
+          </span>
+        )}
+        {day && (
+          <span className="active-filter">
+            День: {day} 
+            <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('day'); return p; })}>×</button>
+          </span>
+        )}
+        {(tag || author || day || since || until) && (
+          <button className="btn btn-reset" onClick={() => navigate('/posts')}>Сбросить</button>
+        )}
       </div>
     </div>
 

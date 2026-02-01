@@ -145,7 +145,7 @@ body {
 }
 
 .collapse-toggle.mobile-only {
-  display:;
+  display: block;
 }
 
 /* Блок клуба */
@@ -1760,6 +1760,76 @@ html {
   flex: 1;
   text-align: center;
   font-weight: var(--font-weight-medium);
+}
+
+/* --- V2 Feed Styles --- */
+.v2-header {
+  padding: 1rem 1.5rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.v2-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: var(--font-weight-medium);
+}
+
+.feed-filters-display {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.active-filter {
+  background: var(--accent);
+  color: var(--foreground);
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+}
+
+.filter-remove-btn {
+  background: none;
+  border: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.filter-remove-btn:hover {
+  color: var(--foreground);
+}
+
+.btn-reset {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  height: auto;
+}
+
+@media (max-width: 768px) {
+  .v2-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 768px) {
