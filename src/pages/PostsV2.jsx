@@ -102,20 +102,24 @@ export default function PostsV2() {
     return `?${newParams.toString()}`;
   };
 
-  const Pagination = () => (
-    <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'center', gap: '2rem', padding: '1rem' }}>
-      {pageMeta.prevUntil && (
-        <Link to={getPaginationUrl({ until: pageMeta.prevUntil })} className="btn btn-secondary">
-          ← Новее
-        </Link>
-      )}
-      {pageMeta.nextSince && (
-        <Link to={getPaginationUrl({ since: pageMeta.nextSince })} className="btn btn-secondary">
-          Старее →
-        </Link>
-      )}
-    </div>
-  );
+  const Pagination = () => {
+    if (!pageMeta.prevUntil && !pageMeta.nextSince) return null;
+    
+    return (
+      <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'center', gap: '2rem', padding: '1rem' }}>
+        {pageMeta.prevUntil && (
+          <Link to={getPaginationUrl({ until: pageMeta.prevUntil })} className="btn btn-secondary">
+            ← Новее
+          </Link>
+        )}
+        {pageMeta.nextSince && (
+          <Link to={getPaginationUrl({ since: pageMeta.nextSince })} className="btn btn-secondary">
+            Старее →
+          </Link>
+        )}
+      </div>
+    );
+  };
 
   if (loading) {
     return <div className="loading">...</div>;
