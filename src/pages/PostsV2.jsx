@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { postsAPI, commentsAPI } from '../services/api';
 import  { useAuth } from '../utils/AuthContext';
 import MarkdownRenderer from '../components/MarkdownRenderer';
@@ -16,24 +16,49 @@ const getRoleDisplay = (role) => {
   return roleMap[role] || role;
 };
 
-export default function Home() {
+export default function PostsV2() {
   const [posts, setPosts] = useState([]);
+  const [pageMeta, setPageMeta] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selectedTags, setSelectedTags] = useState([]);
-  const [selectedAuthors, setSelectedAuthors] = useState([]);
-  const [allTags, setAllTags] = useState([]);
-  const [allAuthors, setAllAuthors] = useState([]);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const { user, logout } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  const since = searchParams.get('since');
+  const until = searchParams.get('until');
+  const tag = searchParams.get('tag');
+  const author = searchParams.get('author');
+  const day = searchParams.get('day');
 
   useEffect(() => {
     loadPosts();
-  }, []);
+  }, [since, until, tag, author, day]);
 
   const loadPosts = async () => {
+    setLoading(true);
     try {
-      const response = await postsAPI.getAll({ limit: 50 });
-      const postsData = response.data.posts;
+      const params = {};
+      if (since) params.since = since;
+      if (until) params.until = until;
+      if (tag) params.tag = tag;
+      if (author) params.author = author;
+      if (day) params.day = day;
+      
+      const response = await postsAPI.getAllV2(params);
+      const postsData = response.data.items;
+      const meta = response.data.page;
+
+      // URL Rewrite logic: if we used 'until', rewrite to 'since' of the first item
+      if (until && postsData.length > 0) {
+        const newSince = Number(postsData[0].createdAt) + 1;
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('until');
+        newParams.set('since', newSince.toString());
+        // replaceState to keep URL clean and shareable without re-triggering useEffect
+        window.history.replaceState(null, '', `?${newParams.toString()}`);
+      }
+
       const postsWithComments = await Promise.all(
         postsData.map(async (post) => {
           try {
@@ -46,39 +71,12 @@ export default function Home() {
         })
       );
       setPosts(postsWithComments);
-
-      const tags = new Set();
-      const authors = new Set();
-      postsWithComments.forEach((post) => {
-        if (post.tags) {
-          post.tags.forEach((tag) => {
-            const cleanTag = tag.startsWith('#') ? tag.substring(1) : tag;
-            tags.add(cleanTag);
-          });
-        }
-        if (post.username) {
-          authors.add(post.username);
-        }
-      });
-      setAllTags(Array.from(tags));
-      setAllAuthors(Array.from(authors));
+      setPageMeta(meta);
     } catch (error) {
       console.error('Failed to load posts:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const toggleTag = (tag) => {
-    setSelectedTags((prev) =>
-    prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
-  };
-
-  const toggleAuthor = (author) => {
-    setSelectedAuthors((prev) =>
-    prev.includes(author) ? prev.filter((a) => a !== author) : [...prev, author]
-    );
   };
 
   const handleShare = (postId) => {
@@ -88,19 +86,64 @@ export default function Home() {
     .catch(() => alert('Ошибка копирования'));
   };
 
-  const filteredPosts = posts.filter((post) => {
-    if (selectedTags.length > 0) {
-      if (!post.tags || !selectedTags.some((tag) => post.tags.includes(tag))) {
-        return false;
+  const getPaginationUrl = (paramsUpdate) => {
+    const newParams = new URLSearchParams(searchParams);
+    Object.keys(paramsUpdate).forEach(key => {
+      if (paramsUpdate[key] === null) {
+        newParams.delete(key);
+      } else {
+        newParams.set(key, paramsUpdate[key]);
       }
-    }
-    if (selectedAuthors.length > 0) {
-      if (!selectedAuthors.includes(post.username)) {
-        return false;
-      }
-    }
-    return true;
-  });
+    });
+    // When navigating to a new page, ensure we only have one of since/until
+    if (paramsUpdate.since) newParams.delete('until');
+    if (paramsUpdate.until) newParams.delete('since');
+    
+    return `?${newParams.toString()}`;
+  };
+
+  const Pagination = () => {
+    if (!pageMeta.prevUntil && !pageMeta.nextSince && !tag && !author && !day) return null;
+    
+    return (
+      <div className="pagination-container">
+        <div className="pagination-controls">
+          {pageMeta.prevUntil ? (
+            <Link to={getPaginationUrl({ until: pageMeta.prevUntil })} className="btn btn-secondary" style={{ minWidth: '100px', textAlign: 'center' }}>
+              ← Новее
+            </Link>
+          ) : <div style={{ minWidth: '100px' }}></div>}
+
+          <div className="feed-filters-display">
+            {tag && (
+              <span className="active-filter">
+                {tag} 
+                <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('tag'); return p; })}>×</button>
+              </span>
+            )}
+            {author && (
+              <span className="active-filter">
+                {author} 
+                <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('author'); return p; })}>×</button>
+              </span>
+            )}
+            {day && (
+              <span className="active-filter">
+                {day} 
+                <button className="filter-remove-btn" onClick={() => setSearchParams(p => { p.delete('day'); return p; })}>×</button>
+              </span>
+            )}
+          </div>
+
+          {pageMeta.nextSince ? (
+            <Link to={getPaginationUrl({ since: pageMeta.nextSince })} className="btn btn-secondary" style={{ minWidth: '100px', textAlign: 'center' }}>
+              Старее →
+            </Link>
+          ) : <div style={{ minWidth: '100px' }}></div>}
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return <div className="loading">...</div>;
@@ -116,14 +159,15 @@ export default function Home() {
     </button>
 
     <div className="feed">
-    {filteredPosts.length === 0 ? (
+    <Pagination />
+
+    {posts.length === 0 ? (
       <div className="no-posts">
       <div>Нет постов</div>
       </div>
     ) : (
-      filteredPosts.map((post) => (
+      posts.map((post) => (
         <div key={post.postId} className="post-fullwidth">
-        {/* Header: аватар слева маленький, справа title/автор/дата */}
         <div className="post-header-full">
         <div className="post-avatar-small">
         <AvatarDisplay
@@ -138,27 +182,25 @@ export default function Home() {
         <h2 className="post-title">{post.title}</h2>
         </Link>
         <div className="post-meta">
-        <span>{post.username}</span>
+        <Link to={`/posts?author=${encodeURIComponent(post.username)}`} className="author-link">{post.username}</Link>
         <span>{new Date(post.createdAt).toLocaleDateString('ru-RU')}</span>
         </div>
         </div>
         </div>
 
-        {/* Content: полный текст без отступов */}
         <div className="post-content-full">
         <MarkdownRenderer content={post.content} postId={post.postId} />
         </div>
 
-        {/* Footer: теги, комменты, share, flag */}
         <div className="post-footer-full">
         {post.tags &&
-          post.tags.map((tag, idx) => (
+          post.tags.map((t, idx) => (
             <Link
             key={idx}
-            to={`/?tag=${encodeURIComponent(tag)}`}
+            to={`/posts?tag=${encodeURIComponent(t)}`}
             className="post-tag"
             >
-            {tag}
+            {t}
             </Link>
           ))}
           <div className="post-actions-full">
@@ -175,15 +217,15 @@ export default function Home() {
       <button onClick={() => handleShare(post.postId)} className="post-share-btn">
       Поделиться
       </button>
-      <span className="post-flag-placeholder">Флаг</span>
       </div>
       </div>
       </div>
       ))
     )}
+
+    <Pagination />
     </div>
 
-    {/* Sidebar */}
     <aside className={`sidebar ${sidebarExpanded ? 'expanded' : ''}`}>
     {user ? (
       <Link to="/posts/new" className="new-post-btn">
@@ -193,19 +235,21 @@ export default function Home() {
 
     <div className="club-block">
     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-    <img
-    src={signofImage}
-    alt="TXT-ME CLUB"
-    className="club-icon"
-    style={{ objectFit: 'cover' }}
-    />
-    <h2 style={{ margin: 0 }}>TXT-ME CLUB</h2>
+    <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '1rem', textDecoration: 'none', color: 'inherit' }}>
+      <img
+      src={signofImage}
+      alt="TXT-ME CLUB"
+      className="club-icon"
+      style={{ objectFit: 'cover' }}
+      />
+      <h2 style={{ margin: 0 }}>TXT-ME CLUB</h2>
+    </Link>
     </div>
     </div>
 
     <div className="user-section">
-    <Link to="/posts" className="sidebar-nav-link">
-      Лента V2
+    <Link to="/" className="sidebar-nav-link">
+        Лента V1
     </Link>
     {user ? (
       <div>
@@ -244,45 +288,6 @@ export default function Home() {
     )}
     </div>
 
-    <div className="filters-section">
-    <div className="filter-group">
-    <div className="filter-label">Теги</div>
-    {allTags.length === 0 ? null : (
-      <div className="filter-options">
-      {allTags.map((tag) => (
-        <div key={tag} className="filter-option" onClick={() => toggleTag(tag)}>
-        <input
-        type="checkbox"
-        className="checkbox"
-        checked={selectedTags.includes(tag)}
-        readOnly
-        />
-        {tag}
-        </div>
-      ))}
-      </div>
-    )}
-    </div>
-
-    <div className="filter-group">
-    <div className="filter-label">Авторы</div>
-    {allAuthors.length === 0 ? null : (
-      <div className="filter-options">
-      {allAuthors.map((author) => (
-        <div key={author} className="filter-option" onClick={() => toggleAuthor(author)}>
-        <input
-        type="checkbox"
-        className="checkbox"
-        checked={selectedAuthors.includes(author)}
-        readOnly
-        />
-        {author}
-        </div>
-      ))}
-      </div>
-    )}
-    </div>
-    </div>
     </aside>
     </div>
   );

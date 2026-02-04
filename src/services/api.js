@@ -52,6 +52,7 @@ export const authAPI = {
 
 export const postsAPI = {
   getAll: (params) => api.get('/posts', { params }),
+  getAllV2: (params) => api.get('/v2/posts', { params }),
   getById: (id) => api.get(`/posts/${id}`),
   create: (data) => api.post('/posts', data),
   update: (id, data) => api.put(`/posts/${id}`, data),

@@ -4,6 +4,7 @@ import { setAuthModalHandler } from './services/api';
 import { useState, useEffect, Component } from 'react';
 
 import Home from './pages/Home';
+import PostsV2 from './pages/PostsV2';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import PostView from './pages/PostView';
@@ -29,6 +30,7 @@ export default function App() {
     <Routes>
     {/* Статические роуты (твои оригинальные пути) */}
     <Route path="/" element={<Home />} />
+    <Route path="/posts" element={<PostsV2 />} />
     <Route path="/login" element={<Login />} />
     <Route path="/register" element={<Register />} />
     <Route path="/posts/new" element={<CreatePost />} />
