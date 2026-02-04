@@ -57,9 +57,9 @@ const CommentItem = ({
     <div
     key={comment.commentId}
     style={{
-      marginLeft: `${level * 2}rem`,
+      marginLeft: level > 0 ? '1rem' : 0,
       borderLeft: level > 0 ? '2px solid var(--border)' : 'none',
-          paddingLeft: level > 0 ? '1rem' : 0,
+          paddingLeft: level > 0 ? '0.5rem' : 0,
           marginBottom: '1rem'
     }}
     >
