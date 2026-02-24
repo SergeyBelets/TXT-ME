@@ -365,6 +365,21 @@ body {
   line-height: 1.6;
 }
 
+.comment-with-avatar {
+  display: flex;
+  gap: 0.75rem;
+  min-width: 0; /* Allow flex children to shrink */
+}
+
+.comment-avatar-container {
+  flex-shrink: 0; /* Prevent avatar from shrinking */
+}
+
+.comment-with-avatar > div:last-child {
+  flex: 1;
+  min-width: 200px; /* Minimum width for text content */
+}
+
 .comments-section {
   margin-top: 2rem;
 }
