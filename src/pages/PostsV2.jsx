@@ -186,7 +186,7 @@ export default function PostsV2() {
         <span>{new Date(post.createdAt).toLocaleDateString('ru-RU')}</span>
         {post.visibilityLevel > 0 && (
           <span className="visibility-badge" title="Уровень видимости">
-            🔒 {post.visibilityLevel === 10 ? 'Рег+' : post.visibilityLevel === 20 ? 'Авт+' : post.visibilityLevel === 30 ? 'Смот+' : 'Прив'}
+            🔒 {post.visibilityLevel === 10 ? 'Комментаторы' : post.visibilityLevel === 20 ? 'Авторы' : post.visibilityLevel === 30 ? 'Смотрители' : 'Настоятели'}
           </span>
         )}
         </div>
