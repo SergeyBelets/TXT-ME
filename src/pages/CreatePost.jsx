@@ -20,6 +20,7 @@ export default function CreatePost() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tags, setTags] = useState('');
+  const [visibilityLevel, setVisibilityLevel] = useState(0);
 
   // Аватары
   const [avatars, setAvatars] = useState([]);
@@ -71,6 +72,7 @@ export default function CreatePost() {
         title,
         content,
         tags: tags.split(',').map(t => t.trim()).filter(t => t),
+        visibilityLevel: Number(visibilityLevel),
       };
 
       // Добавляем avatarId только если выбран НЕ дефолтный
@@ -190,6 +192,34 @@ export default function CreatePost() {
     onChange={(e) => setTags(e.target.value)}
     placeholder="четадь, песадь"
     />
+    </div>
+
+    {/* Visibility Level Selection */}
+    <div className="form-group">
+    <label>Уровень видимости</label>
+    <select 
+      value={visibilityLevel} 
+      onChange={(e) => setVisibilityLevel(e.target.value)}
+      className="form-control"
+      style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--input-background)' }}
+    >
+      <option value={0}>Всем (Публичный)</option>
+      {(user?.role === 'KOMMENTATOR' || user?.role === 'AVTOR' || user?.role === 'SMOTRITEL' || user?.role === 'NASTOIATEL') && (
+        <option value={10}>Зарегистрированным (Комментатор+)</option>
+      )}
+      {(user?.role === 'AVTOR' || user?.role === 'SMOTRITEL' || user?.role === 'NASTOIATEL') && (
+        <option value={20}>Авторам (Автор+)</option>
+      )}
+      {(user?.role === 'SMOTRITEL' || user?.role === 'NASTOIATEL') && (
+        <option value={30}>Смотрителям (Смотритель+)</option>
+      )}
+      {user?.role === 'NASTOIATEL' && (
+        <option value={40}>Настоятелю (Только мне)</option>
+      )}
+    </select>
+    <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', marginTop: '0.25rem' }}>
+      Кто сможет увидеть этот пост.
+    </p>
     </div>
 
     {/* Выбор аватара */}
