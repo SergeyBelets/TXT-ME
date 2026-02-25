@@ -203,18 +203,18 @@ export default function CreatePost() {
       className="form-control"
       style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--input-background)' }}
     >
-      <option value={0}>Всем (Публичный)</option>
+      <option value={0}>Всем</option>
       {(user?.role === 'KOMMENTATOR' || user?.role === 'AVTOR' || user?.role === 'SMOTRITEL' || user?.role === 'NASTOIATEL') && (
-        <option value={10}>Зарегистрированным (Комментатор+)</option>
+        <option value={10}>Комментаторам</option>
       )}
       {(user?.role === 'AVTOR' || user?.role === 'SMOTRITEL' || user?.role === 'NASTOIATEL') && (
-        <option value={20}>Авторам (Автор+)</option>
+        <option value={20}>Авторам</option>
       )}
       {(user?.role === 'SMOTRITEL' || user?.role === 'NASTOIATEL') && (
-        <option value={30}>Смотрителям (Смотритель+)</option>
+        <option value={30}>Смотрителям</option>
       )}
       {user?.role === 'NASTOIATEL' && (
-        <option value={40}>Настоятелю (Только мне)</option>
+        <option value={40}>Настоятелям</option>
       )}
     </select>
     <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', marginTop: '0.25rem' }}>
