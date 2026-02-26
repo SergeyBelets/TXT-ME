@@ -1852,6 +1852,18 @@ html {
   margin-bottom: 1rem;
 }
 
+.visibility-badge {
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: var(--font-weight-medium);
+}
+
 .sidebar-nav-link:hover {
   background: var(--muted);
 }

@@ -184,6 +184,11 @@ export default function PostsV2() {
         <div className="post-meta">
         <Link to={`/posts?author=${encodeURIComponent(post.username)}`} className="author-link">{post.username}</Link>
         <span>{new Date(post.createdAt).toLocaleDateString('ru-RU')}</span>
+        {post.visibilityLevel > 0 && (
+          <span className="visibility-badge" title="Уровень видимости">
+            🔒 {post.visibilityLevel === 10 ? 'Комментаторы' : post.visibilityLevel === 20 ? 'Авторы' : post.visibilityLevel === 30 ? 'Смотрители' : 'Настоятели'}
+          </span>
+        )}
         </div>
         </div>
         </div>
