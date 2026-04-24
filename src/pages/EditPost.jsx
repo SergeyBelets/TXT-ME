@@ -22,6 +22,7 @@ export default function EditPost() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tags, setTags] = useState('');
+  const [visibilityLevel, setVisibilityLevel] = useState(0);
 
   // Аватары
   const [avatars, setAvatars] = useState([]);
@@ -51,6 +52,7 @@ export default function EditPost() {
       setTitle(loadedPost.title);
       setContent(loadedPost.content);
       setTags(loadedPost.tags?.join(', ') || '');
+      setVisibilityLevel(loadedPost.visibilityLevel || 0);
       setSelectedAvatarId(loadedPost.postAvatarId || null);
     } catch (error) {
       console.error('Failed to load post:', error);
@@ -92,6 +94,7 @@ export default function EditPost() {
         title,
         content,
         tags: tags.split(',').map(t => t.trim()).filter(t => t),
+        visibilityLevel: Number(visibilityLevel),
       };
 
       // Добавляем avatarId (может быть изменён или удалён)
@@ -214,6 +217,34 @@ export default function EditPost() {
     onChange={(e) => setTags(e.target.value)}
     placeholder="четадь, песадь"
     />
+    </div>
+    
+    {/* Visibility Level Selection */}
+    <div className="form-group">
+    <label>Уровень видимости</label>
+    <select 
+      value={visibilityLevel} 
+      onChange={(e) => setVisibilityLevel(e.target.value)}
+      className="form-control"
+      style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--input-background)' }}
+    >
+      <option value={0}>Всем</option>
+      {(user?.role === 'KOMMENTATOR' || user?.role === 'AVTOR' || user?.role === 'SMOTRITEL' || user?.role === 'NASTOIATEL') && (
+        <option value={10}>Комментаторам</option>
+      )}
+      {(user?.role === 'AVTOR' || user?.role === 'SMOTRITEL' || user?.role === 'NASTOIATEL') && (
+        <option value={20}>Авторам</option>
+      )}
+      {(user?.role === 'SMOTRITEL' || user?.role === 'NASTOIATEL') && (
+        <option value={30}>Смотрителям</option>
+      )}
+      {user?.role === 'NASTOIATEL' && (
+        <option value={40}>Настоятелям</option>
+      )}
+    </select>
+    <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', marginTop: '0.25rem' }}>
+      Кто сможет увидеть этот пост.
+    </p>
     </div>
 
     {/* Выбор аватара */}
